@@ -1,0 +1,5 @@
+version=1
+title=Dark Souls Death
+description=Replaces the Build 42 death screen text and music with Dark Souls "YOU DIED".
+tags=Death;Audio;UI
+visibility=public

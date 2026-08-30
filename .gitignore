@@ -39,3 +39,10 @@ luac.out
 *.x86_64
 *.hex
 
+# Documentation
+*.md
+!README.md
+
+# Agent scratch/test files
+TEST_FILES/
+
