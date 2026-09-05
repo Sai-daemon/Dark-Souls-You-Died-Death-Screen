@@ -45,4 +45,4 @@ luac.out
 
 # Agent scratch/test files
 TEST_FILES/
-
+*.sh
