@@ -35,28 +35,55 @@ function ISPostDeathUI:prerender()
 	else
 		self:bringToTop()
 	end
-	local T = DarkSoulsDeathTiming or { showDelay = 3, fadeInDuration = 1, desatTarget = 0.9, blackoutDelay = 4, blackoutDuration = 2 }
-	local elapsedMs = getTimestampMs() - self.timeOfDeathMs
-	if not self.waitOver then
-		self.waitOver = elapsedMs > T.showDelay * 1000.0
-		if self.waitOver and not self.musicPlayed then
-			self.musicPlayed = true
-			getSoundManager():playMusic("PlayerDied")
-		end
+	local T = DarkSoulsDeathTiming or { muffleStart = 1, muffleRampDuration = 2, muffleLevel = 0.25, showDelay = 3, barFadeInDuration = 0.4, pngStartScale = 0.9, pngEndScale = 1.05, pngStartAlpha = 0.7, pngEndAlpha = 0.85, pngGrowDuration = 2, pngFadeOutDuration = 1, desatStart = 3, desatDuration = 1, desatTarget = 1.0, blackoutStart = 7, blackoutDuration = 1, windowDelay = 8.5, musicRestoreDuration = 2 }
+	local elapsedS = (getTimestampMs() - self.timeOfDeathMs) / 1000.0
+	if not self.stingPlayed and elapsedS >= T.showDelay then
+		self.stingPlayed = true
+		getSoundManager():playUISound("YouDiedSting")
 	end
-	if self.waitOver and not self.fadeStart then
-		self.fadeStart = getTimestampMs()
+	local desatProgress = 0.0
+	if elapsedS > T.desatStart then
+		desatProgress = math.min(1.0, (elapsedS - T.desatStart) / T.desatDuration)
 	end
-	local desatProgress = math.min(1.0, elapsedMs / (T.showDelay * 1000.0))
 	local blackoutProgress = 0.0
-	if elapsedMs > (T.showDelay + T.blackoutDelay) * 1000.0 then
-		blackoutProgress = math.min(1.0, (elapsedMs - (T.showDelay + T.blackoutDelay) * 1000.0) / (T.blackoutDuration * 1000.0))
+	if elapsedS > T.blackoutStart then
+		blackoutProgress = math.min(1.0, (elapsedS - T.blackoutStart) / T.blackoutDuration)
 	end
 	self.blackoutProgress = blackoutProgress
 	local overlay = getSearchMode():getSearchModeForPlayer(self.playerIndex)
 	if overlay then
-		overlay:getDesat():setTargets(T.desatTarget * desatProgress, T.desatTarget * desatProgress)
-		overlay:getDarkness():setTargets(blackoutProgress, blackoutProgress)
+		local desatVal = T.desatTarget * desatProgress
+		local darkVal = blackoutProgress
+		overlay:getDesat():setTargets(desatVal, desatVal)
+		pcall(function() overlay:getDesat():setExterior(desatVal) end)
+		pcall(function() overlay:getDesat():setInterior(desatVal) end)
+		overlay:getDarkness():setTargets(darkVal, darkVal)
+		pcall(function() overlay:getDarkness():setExterior(darkVal) end)
+		pcall(function() overlay:getDarkness():setInterior(darkVal) end)
+	end
+	if elapsedS >= T.blackoutStart and DarkSoulsDeathDuckGameSounds then
+		DarkSoulsDeathDuckGameSounds()
+	end
+	if elapsedS >= T.blackoutStart then
+		DarkSoulsDeathStopZombiesActive = true
+	end
+	if not self.respawning and DarkSoulsDeathVolumes and DarkSoulsDeathVolumes.music ~= nil then
+		local sm = getSoundManager()
+		if elapsedS >= T.muffleStart and elapsedS < T.blackoutStart then
+			local muffleProgress = math.min(1.0, (elapsedS - T.muffleStart) / T.muffleRampDuration)
+			local factor = 1.0 - muffleProgress * (1.0 - T.muffleLevel)
+			pcall(function() sm:setMusicVolume(DarkSoulsDeathVolumes.music * factor) end)
+			pcall(function() sm:setSoundVolume(DarkSoulsDeathVolumes.sound * factor) end)
+			pcall(function() sm:setAmbientVolume(DarkSoulsDeathVolumes.ambient * factor) end)
+		elseif elapsedS >= T.blackoutStart then
+			pcall(function() sm:setSoundVolume(0.0) end)
+			pcall(function() sm:setAmbientVolume(0.0) end)
+			local restoreProgress = math.min(1.0, (elapsedS - T.blackoutStart) / T.musicRestoreDuration)
+			pcall(function() sm:setMusicVolume(DarkSoulsDeathVolumes.music * (T.muffleLevel + (1.0 - T.muffleLevel) * restoreProgress)) end)
+		end
+	end
+	if self.clickUntil and getTimestampMs() < self.clickUntil and DarkSoulsDeathVolumes and DarkSoulsDeathVolumes.sound then
+		pcall(function() getSoundManager():setSoundVolume(DarkSoulsDeathVolumes.sound) end)
 	end
 	local allPlayersDead = IsoPlayer.allPlayersDead()
 	self.canQuitExit = allPlayersDead
@@ -66,52 +93,79 @@ function ISPostDeathUI:prerender()
 		allowRespawn = false
 	end
 	self.canRespawn = allowRespawn
-	self.windowVisible = (self.blackoutProgress or 0) >= 1 and not self.showingStats
+	self.windowVisible = elapsedS >= T.windowDelay and not self.showingStats
+	local hoverIdx = nil
+	if self.windowVisible and not self.showingStats then
+		hoverIdx = self:buttonAt(self:getMouseX(), self:getMouseY())
+	end
+	self.hoveredIndex = hoverIdx
+	local dt = (UIManager.getMillisSinceLastRender() or 33) / 1000.0
+	local speed = dt / 0.15
+	if hoverIdx then
+		self.hoverFade = math.min(1, (self.hoverFade or 0) + speed)
+	else
+		self.hoverFade = math.max(0, (self.hoverFade or 0) - speed)
+	end
 	ISPanelJoypad.prerender(self)
 	self:setStencilRect(self.screenX - self.x, self.screenY - self.y, self.screenWidth, self.screenHeight)
 end
 
 function ISPostDeathUI:render()
 	local dialogUp = self.quitToDesktopDialog and self.quitToDesktopDialog:isReallyVisible()
-	if not dialogUp and self.waitOver then
-		local T = DarkSoulsDeathTiming or { fadeInDuration = 1 }
-		local fadeIn = 1.0
-		if self.fadeStart then
-			fadeIn = math.min(1.0, (getTimestampMs() - self.fadeStart) / (T.fadeInDuration * 1000.0))
-		end
-		if not self.youDiedTexture then
-			self.youDiedTexture = getTexture("media/ui/DarkSoulsDeath/you_died.png")
+	if not dialogUp then
+		local T = DarkSoulsDeathTiming or { showDelay = 3, barFadeInDuration = 0.4, pngStartScale = 0.9, pngEndScale = 1.05, pngStartAlpha = 0.8, pngEndAlpha = 0.9, pngGrowDuration = 2, pngFadeOutDuration = 1 }
+		local elapsedS = (getTimestampMs() - self.timeOfDeathMs) / 1000.0
+		if elapsedS >= T.showDelay then
 			if not self.youDiedTexture then
-				self.youDiedTexture = getTexture("media/textures/DarkSoulsDeath/you_died.png")
+				self.youDiedTexture = getTexture("media/ui/DarkSoulsDeath/you_died.png")
+				if not self.youDiedTexture then
+					self.youDiedTexture = getTexture("media/textures/DarkSoulsDeath/you_died.png")
+				end
 			end
-		end
-		local imgW = self.screenWidth * 0.36
-		local imgH = imgW * (1120 / 3794)
-		if self.youDiedTexture then
-			local tw = self.youDiedTexture:getWidth()
-			local th = self.youDiedTexture:getHeight()
-			if tw and th and tw > 0 then
-				imgH = imgW * (th / tw)
+			local growT = math.min(1.0, (elapsedS - T.showDelay) / T.pngGrowDuration)
+			local scale = T.pngStartScale + (T.pngEndScale - T.pngStartScale) * growT
+			local pngAlpha = T.pngStartAlpha + (T.pngEndAlpha - T.pngStartAlpha) * growT
+			if elapsedS > T.showDelay + T.pngGrowDuration then
+				local fadeT = math.min(1.0, (elapsedS - (T.showDelay + T.pngGrowDuration)) / T.pngFadeOutDuration)
+				pngAlpha = T.pngEndAlpha * (1.0 - fadeT)
 			end
-		end
-		local imgX = self.screenX + (self.screenWidth - imgW) / 2 - self:getAbsoluteX()
-		local imgY = self.screenY + (self.screenHeight - imgH) / 2 - self:getAbsoluteY()
-		local fadeH = imgH * 0.6
-		local barH = imgH + fadeH * 2
-		local barY = imgY - fadeH
-		if not self.barTexture then
-			self.barTexture = getTexture("media/ui/DarkSoulsDeath/bar.png")
-			if not self.barTexture then
-				self.barTexture = getTexture("media/textures/DarkSoulsDeath/bar.png")
+			local barAlpha = 0.0
+			if elapsedS < T.showDelay + T.barFadeInDuration then
+				barAlpha = math.min(1.0, (elapsedS - T.showDelay) / T.barFadeInDuration)
+			else
+				barAlpha = 1.0
 			end
-		end
-		if self.barTexture then
-			self:drawTextureScaled(self.barTexture,
-				self.screenX - self:getAbsoluteX(), barY,
-				self.screenWidth, barH, fadeIn, 1, 1, 1)
-		end
-		if self.youDiedTexture then
-			self:drawTextureScaledAspect(self.youDiedTexture, imgX, imgY, imgW, imgH, fadeIn, 1, 1, 1)
+			if elapsedS > T.showDelay + T.pngGrowDuration then
+				local fadeT = math.min(1.0, (elapsedS - (T.showDelay + T.pngGrowDuration)) / T.pngFadeOutDuration)
+				barAlpha = 1.0 * (1.0 - fadeT)
+			end
+			if self.youDiedTexture and (pngAlpha > 0 or barAlpha > 0) then
+				local baseW = self.screenWidth * 0.36
+				local tw = self.youDiedTexture:getWidth()
+				local th = self.youDiedTexture:getHeight()
+				local aspect = (tw and th and tw > 0) and (th / tw) or (1120 / 3794)
+				local imgW = baseW * scale
+				local imgH = imgW * aspect
+				local imgX = self.screenX + (self.screenWidth - imgW) / 2 - self:getAbsoluteX()
+				local imgY = self.screenY + (self.screenHeight - imgH) / 2 - self:getAbsoluteY()
+				local fadeH = imgH * 0.6
+				local barH = imgH + fadeH * 2
+				local barY = imgY - fadeH
+				if not self.barTexture then
+					self.barTexture = getTexture("media/ui/DarkSoulsDeath/bar.png")
+					if not self.barTexture then
+						self.barTexture = getTexture("media/textures/DarkSoulsDeath/bar.png")
+					end
+				end
+				if self.barTexture and barAlpha > 0 then
+					self:drawTextureScaled(self.barTexture,
+						self.screenX - self:getAbsoluteX(), barY,
+						self.screenWidth, barH, barAlpha, 1, 1, 1)
+				end
+				if pngAlpha > 0 then
+					self:drawTextureScaledAspect(self.youDiedTexture, imgX, imgY, imgW, imgH, pngAlpha, 1, 1, 1)
+				end
+			end
 		end
 	end
 	if (self.blackoutProgress or 0) > 0 then
@@ -146,24 +200,30 @@ function ISPostDeathUI:drawStats()
 end
 
 function ISPostDeathUI:drawWindow()
+	local joypadActive = JoypadState.players[self.playerIndex+1] ~= nil
 	local list = {}
 	if self.canRespawn then
-		table.insert(list, { label = self.respawnLabel, cb = self.onRespawn, font = UIFont.Medium, hgt = BUTTON_HGT, fh = FONT_HGT_MEDIUM })
+		table.insert(list, { label = self.respawnLabel, cb = self.onRespawn, font = UIFont.Medium, hgt = BUTTON_HGT, fh = FONT_HGT_MEDIUM, joy = joypadActive and Joypad.Texture.AButton or nil })
 	end
 	if self.canQuitExit then
-		table.insert(list, { label = self.exitLabel, cb = self.onExit, font = UIFont.Medium, hgt = BUTTON_HGT, fh = FONT_HGT_MEDIUM })
-		table.insert(list, { label = self.quitLabel, cb = self.onQuitToDesktop, font = UIFont.Medium, hgt = BUTTON_HGT, fh = FONT_HGT_MEDIUM })
+		table.insert(list, { label = self.exitLabel, cb = self.onExit, font = UIFont.Medium, hgt = BUTTON_HGT, fh = FONT_HGT_MEDIUM, joy = joypadActive and Joypad.Texture.XButton or nil })
+		table.insert(list, { label = self.quitLabel, cb = self.onQuitToDesktop, font = UIFont.Medium, hgt = BUTTON_HGT, fh = FONT_HGT_MEDIUM, joy = joypadActive and Joypad.Texture.BButton or nil })
 	end
-	table.insert(list, { label = self.statsLabel, cb = self.onStats, font = UIFont.Large, hgt = FONT_HGT_LARGE + 6, fh = FONT_HGT_LARGE })
+	table.insert(list, { label = self.statsLabel, cb = self.onStats, font = UIFont.Large, hgt = FONT_HGT_LARGE + 6, fh = FONT_HGT_LARGE, joy = joypadActive and Joypad.Texture.YButton or nil })
 	if #list == 0 then
 		self.buttonRects = {}
 		return
 	end
+	local joyW = FONT_HGT_MEDIUM
 	local buttonWid = UI_BORDER_SPACING * 2
 	for _, b in ipairs(list) do
 		local w = getTextManager():MeasureStringX(b.font, b.label)
-		if w + UI_BORDER_SPACING * 2 > buttonWid then
-			buttonWid = w + UI_BORDER_SPACING * 2
+		local need = w + UI_BORDER_SPACING * 2
+		if b.joy then
+			need = need + joyW + 6
+		end
+		if need > buttonWid then
+			buttonWid = need
 		end
 	end
 	local totalH = 0
@@ -177,9 +237,17 @@ function ISPostDeathUI:drawWindow()
 	self.buttonRects = {}
 	local y = windowY
 	for i, b in ipairs(list) do
-		self:drawRect(windowX, y, buttonWid, b.hgt, 0.8, 0.0, 0.0, 0.0)
+		local hover = (i == self.hoveredIndex) and (self.hoverFade or 0) or 0
+		self:drawRect(windowX, y, buttonWid, b.hgt, 0.8 + 0.2 * hover, 0.3 * hover, 0.3 * hover, 0.3 * hover)
 		self:drawRectBorder(windowX, y, buttonWid, b.hgt, 0.3, 0.4, 0.4, 0.4)
-		self:drawTextCentre(b.label, windowX + buttonWid / 2, y + (b.hgt - b.fh) / 2, 1.0, 1.0, 1.0, 1.0, b.font)
+		local textW = getTextManager():MeasureStringX(b.font, b.label)
+		local textX = windowX + (buttonWid - textW) / 2
+		if b.joy then
+			local joyH = math.min(joyW, b.hgt - 6)
+			self:drawTextureScaled(b.joy, windowX + 6, y + (b.hgt - joyH) / 2, joyH, joyH, 1, 1, 1, 1)
+			textX = windowX + 6 + joyH + 6 + (buttonWid - 6 - joyH - 6 - textW) / 2
+		end
+		self:drawText(b.label, textX, y + (b.hgt - b.fh) / 2, 1.0, 1.0, 1.0, 1.0, b.font)
 		table.insert(self.buttonRects, { x = windowX, y = y, w = buttonWid, h = b.hgt, cb = b.cb })
 		y = y + b.hgt + UI_BORDER_SPACING
 	end
@@ -201,6 +269,44 @@ end
 
 function ISPostDeathUI:hideStats()
 	self.showingStats = false
+end
+
+function ISPostDeathUI:restoreVolumes()
+	if DarkSoulsDeathVolumes and DarkSoulsDeathVolumes.music then
+		getSoundManager():setMusicVolume(DarkSoulsDeathVolumes.music)
+		getSoundManager():setSoundVolume(DarkSoulsDeathVolumes.sound)
+		getSoundManager():setAmbientVolume(DarkSoulsDeathVolumes.ambient)
+	end
+	if DarkSoulsDeathRestoreGameSounds then
+		DarkSoulsDeathRestoreGameSounds()
+	end
+	DarkSoulsDeathStopZombiesActive = false
+end
+
+function ISPostDeathUI:playClick()
+	pcall(function()
+		if DarkSoulsDeathStopZombieSounds then
+			DarkSoulsDeathStopZombieSounds()
+		end
+		local sm = getSoundManager()
+		if DarkSoulsDeathVolumes and DarkSoulsDeathVolumes.sound then
+			sm:setSoundVolume(DarkSoulsDeathVolumes.sound)
+		end
+		self.clickUntil = getTimestampMs() + 250
+		sm:playUISound("UIActivateButton")
+	end)
+end
+
+function ISPostDeathUI:removeFromUIManager()
+	self:restoreVolumes()
+	ISUIElement.removeFromUIManager(self)
+end
+
+function ISPostDeathUI:setVisible(visible)
+	ISUIElement.setVisible(self, visible)
+	if visible and self.respawning then
+		self.respawning = false
+	end
 end
 
 function ISPostDeathUI:onQuitToDesktop()
@@ -227,6 +333,7 @@ end
 
 function ISPostDeathUI:onConfirmQuitToDesktop(button)
 	if button.internal == "YES" then
+		self:restoreVolumes()
 		setGameSpeed(1)
 		pauseSoundAndMusic()
 		setShowPausedMessage(true)
@@ -237,6 +344,7 @@ end
 
 function ISPostDeathUI:onExit()
 	if MainScreen.instance:isReallyVisible() then return end
+	self:restoreVolumes()
 	setGameSpeed(1)
 	self:removeFromUIManager()
 	getCore():exitToMenu()
@@ -245,6 +353,13 @@ end
 function ISPostDeathUI:onRespawn()
 	if MainScreen.instance:isReallyVisible() then return end
 	setGameSpeed(1)
+	if DarkSoulsDeathStopZombieSounds then
+		DarkSoulsDeathStopZombieSounds()
+	end
+	if DarkSoulsDeathVolumes and DarkSoulsDeathVolumes.sound then
+		pcall(function() getSoundManager():setSoundVolume(DarkSoulsDeathVolumes.sound) end)
+	end
+	self.respawning = true
 	self:setVisible(false)
 	local joypadData = JoypadState.players[self.playerIndex+1]
 	if joypadData then
@@ -285,6 +400,7 @@ function ISPostDeathUI:onMouseUp(x, y)
 		if self:buttonAt(self:getMouseX(), self:getMouseY()) == idx then
 			local b = self.buttonRects[idx]
 			if b and b.cb then
+				self:playClick()
 				b.cb(self)
 				return true
 			end
@@ -302,6 +418,35 @@ function ISPostDeathUI:onMouseWheel(del)
 end
 
 function ISPostDeathUI:onGainJoypadFocus(joypadData)
+end
+
+function ISPostDeathUI:onJoypadDown(button, joypadData)
+	if self.showingStats then
+		self:playClick()
+		self:hideStats()
+		return true
+	end
+	if not self.windowVisible then
+		return false
+	end
+	if button == Joypad.AButton and self.canRespawn then
+		self:playClick()
+		self:onRespawn()
+		return true
+	elseif button == Joypad.XButton and self.canQuitExit then
+		self:playClick()
+		self:onExit()
+		return true
+	elseif button == Joypad.BButton and self.canQuitExit then
+		self:playClick()
+		self:onQuitToDesktop()
+		return true
+	elseif button == Joypad.YButton then
+		self:playClick()
+		self:onStats()
+		return true
+	end
+	return false
 end
 
 function ISPostDeathUI:onJoypadBeforeDeactivate(joypadData)

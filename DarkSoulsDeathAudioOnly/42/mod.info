@@ -1,0 +1,7 @@
+name=Dark Souls Death - Audio Only
+author=Riko~Nyaa
+id=DarkSoulsDeathAudioOnly
+description=Audio-only version of Dark Souls Death: death sting, mix muffle, and sound fade. No visual changes. Do not enable together with Dark Souls Death.
+poster=poster.png
+modversion=0.8.0
+incompatible=\DarkSoulsDeath
