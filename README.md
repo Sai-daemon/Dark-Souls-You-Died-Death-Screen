@@ -42,6 +42,8 @@ No Dependencies
 
 I used a  Google Font called "Cinzel" for the base then heavily modified it using an svg editor. This seems to be the most widely recognised closest font and I will admit it required very little work to make it look like the font from Dark Souls. 
 
-# License
+# Licenses and Disclosures
 
 MIT
+
+All Audio/Video assets used in this mod were made by humans. The coding in this mod was done by Deepseek V4 Pro with extensive human testing, oversight, and project management. 

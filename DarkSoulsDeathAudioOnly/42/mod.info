@@ -1,7 +1,0 @@
-name=Dark Souls You Died - Audio Only
-author=Riko~Nyaa
-id=DarkSoulsDeathAudioOnly
-description=Audio-only version of Dark Souls You Died: death sting, mix muffle, and sound fade. No visual changes. Do not enable together with Dark Souls You Died Death Screen.
-poster=poster.png
-modversion=1.0.0
-incompatible=\DarkSoulsYouDied
