@@ -1,15 +1,47 @@
 # Souls-like_Death_Screen
 
 
+![Version](https://img.shields.io/badge/Version-1.0-informational.svg)
+![License](https://img.shields.io/badge/License-MIT-green)
+![Game Version](https://img.shields.io/badge/PZ_Game_Version-42.20_Stable-orange) 
+
+[![Platform](https://img.shields.io/badge/Steam-Storepage-blue?logo=steam)](https://store.steampowered.com/app/108600/Project_Zomboid/)
+[![Steam Workshop](https://img.shields.io/badge/Steam-Workshop_Page-purple?logo=steam)](-PLACEHOLDER-)
+[![Bug Reports](https://img.shields.io/badge/Github-Bug_Reports-red?logo=github)](-placeholder-)
 
 
-## Vision
-Replace the standard Project Zomboid death screen with one similar to that from Dark Souls.
+
+Replaces the regular death screen, music, and menu that plays when you die with one that is like the death screen from Dark Souls Remastered. 
+
+I have included an Audio-only version of the mod which only adds the Dark Souls you died sound effect, with none of the visual/menu changes I made.
 
 
+# Compatibility
+Project Zomboid Version: VERSION   42.20.X STABLE     
+Controller Support: YES   
+Multiplayer Support: UNTESTED   
+Mods (Including UI mods): YES   
+Language Support: ENGLISH
+
+# Dependencies and Installation
+
+No Dependencies
+
+## Install Option A - Steam Workshop
+1. Go to Steam Workshop Page
+2. Subscribe
+3. Enable in the in-game mod manager
+
+## Install Option B - From Source Code
+1. Clone Repo
+2. Move to the respective local mod folder for your installation for project zomboid. On Linux it is located in home/zomboid/mods, windows I am pretty sure is located in documents\zomboid\mods.
+3. Enable in the in-game mod manager
 
 
-
-## Font Choice for "YOU DIED"
+# Font Choice for "YOU DIED"
 
 I used a  Google Font called "Cinzel" for the base then heavily modified it using an svg editor. This seems to be the most widely recognised closest font and I will admit it required very little work to make it look like the font from Dark Souls. 
+
+# License
+
+MIT

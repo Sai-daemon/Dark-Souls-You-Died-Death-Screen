@@ -9,6 +9,7 @@ DarkSoulsDeathTiming = DarkSoulsDeathTiming or {
 	pngStartAlpha = 0.7,
 	pngEndAlpha = 0.85,
 	pngGrowDuration = 2,
+	pngHoldDuration = 0.3,
 	pngFadeOutDuration = 1,
 	desatStart = 3,
 	desatDuration = 1,
@@ -47,8 +48,6 @@ local function snapshotGameSounds()
 			end
 		end
 	end
-	local count = 0
-	for _ in pairs(DarkSoulsDeathSoundSnapshots) do count = count + 1 end
 end
 
 DarkSoulsDeathDuckGameSounds = function()
@@ -63,11 +62,9 @@ DarkSoulsDeathRestoreGameSounds = function()
 	for _, entry in pairs(DarkSoulsDeathSoundSnapshots) do
 		pcall(function() entry.sound:setUserVolume(entry.volume) end)
 	end
+	DarkSoulsDeathSoundSnapshots = {}
 	DarkSoulsDeathSoundsDucked = false
 end
-
-DarkSoulsDeathMutedEmitters = {}
-DarkSoulsDeathEmittersMuted = false
 
 DarkSoulsDeathStopZombieSounds = function()
 	local cell = getCell()

@@ -1,7 +1,6 @@
 ISPostDeathUI = ISPanelJoypad:derive("ISPostDeathUI")
 ISPostDeathUI.instance = {}
 
-local FONT_HGT_SMALL = getTextManager():getFontHeight(UIFont.Small)
 local FONT_HGT_MEDIUM = getTextManager():getFontHeight(UIFont.Medium)
 local FONT_HGT_LARGE = getTextManager():getFontHeight(UIFont.Large)
 local UI_BORDER_SPACING = 10
@@ -35,7 +34,7 @@ function ISPostDeathUI:prerender()
 	else
 		self:bringToTop()
 	end
-	local T = DarkSoulsDeathTiming or { muffleStart = 1, muffleRampDuration = 2, muffleLevel = 0.25, showDelay = 3, barFadeInDuration = 0.4, pngStartScale = 0.9, pngEndScale = 1.05, pngStartAlpha = 0.7, pngEndAlpha = 0.85, pngGrowDuration = 2, pngFadeOutDuration = 1, desatStart = 3, desatDuration = 1, desatTarget = 1.0, blackoutStart = 7, blackoutDuration = 1, windowDelay = 8.5, musicRestoreDuration = 2 }
+	local T = DarkSoulsDeathTiming or { muffleStart = 1, muffleRampDuration = 2, muffleLevel = 0.25, showDelay = 3, barFadeInDuration = 0.4, pngStartScale = 0.9, pngEndScale = 1.05, pngStartAlpha = 0.7, pngEndAlpha = 0.85, pngGrowDuration = 2, pngHoldDuration = 0.3, pngFadeOutDuration = 1, desatStart = 3, desatDuration = 1, desatTarget = 1.0, blackoutStart = 7, blackoutDuration = 1, windowDelay = 8.5, musicRestoreDuration = 2 }
 	local elapsedS = (getTimestampMs() - self.timeOfDeathMs) / 1000.0
 	if not self.stingPlayed and elapsedS >= T.showDelay then
 		self.stingPlayed = true
@@ -113,7 +112,7 @@ end
 function ISPostDeathUI:render()
 	local dialogUp = self.quitToDesktopDialog and self.quitToDesktopDialog:isReallyVisible()
 	if not dialogUp then
-		local T = DarkSoulsDeathTiming or { showDelay = 3, barFadeInDuration = 0.4, pngStartScale = 0.9, pngEndScale = 1.05, pngStartAlpha = 0.8, pngEndAlpha = 0.9, pngGrowDuration = 2, pngFadeOutDuration = 1 }
+		local T = DarkSoulsDeathTiming or { showDelay = 3, barFadeInDuration = 0.4, pngStartScale = 0.9, pngEndScale = 1.05, pngStartAlpha = 0.8, pngEndAlpha = 0.9, pngGrowDuration = 2, pngHoldDuration = 0.3, pngFadeOutDuration = 1 }
 		local elapsedS = (getTimestampMs() - self.timeOfDeathMs) / 1000.0
 		if elapsedS >= T.showDelay then
 			if not self.youDiedTexture then
@@ -122,7 +121,18 @@ function ISPostDeathUI:render()
 					self.youDiedTexture = getTexture("media/textures/DarkSoulsDeath/you_died.png")
 				end
 			end
-			local growT = math.min(1.0, (elapsedS - T.showDelay) / T.pngGrowDuration)
+			local growElapsed = elapsedS - T.showDelay
+			local hold = T.pngHoldDuration or 0
+			local motion = math.max((T.pngGrowDuration or 2) - hold, 0.001)
+			local growT
+			if growElapsed < motion * 0.5 then
+				growT = growElapsed / (motion * 0.5) * 0.5
+			elseif growElapsed < motion * 0.5 + hold then
+				growT = 0.5
+			else
+				growT = 0.5 + (growElapsed - motion * 0.5 - hold) / (motion * 0.5) * 0.5
+			end
+			growT = math.min(1, growT)
 			local scale = T.pngStartScale + (T.pngEndScale - T.pngStartScale) * growT
 			local pngAlpha = T.pngStartAlpha + (T.pngEndAlpha - T.pngStartAlpha) * growT
 			if elapsedS > T.showDelay + T.pngGrowDuration then
@@ -480,6 +490,11 @@ end
 
 function ISPostDeathUI.OnPlayerDeath(playerObj)
 	local playerNum = playerObj:getPlayerNum()
+	local old = ISPostDeathUI.instance[playerNum]
+	if old and old.javaObject and not old.removed then
+		ISUIElement.removeFromUIManager(old)
+	end
+	ISPostDeathUI.instance[playerNum] = nil
 	local panel = ISPostDeathUI:new(playerNum)
 	panel.timeOfDeath = getTimestamp()
 	panel.timeOfDeathMs = getTimestampMs()

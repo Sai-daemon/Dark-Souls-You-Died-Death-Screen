@@ -50,8 +50,6 @@ local function snapshotGameSounds()
 			end
 		end
 	end
-	local count = 0
-	for _ in pairs(soundSnapshots) do count = count + 1 end
 end
 
 local function duckGameSounds()
@@ -61,9 +59,6 @@ local function duckGameSounds()
 		pcall(function() entry.sound:setUserVolume(0.0) end)
 	end
 end
-
-local mutedEmitters = {}
-local emittersMuted = false
 
 local function stopZombieSounds()
 	local cell = getCell()
@@ -100,6 +95,7 @@ local function restoreGameSounds()
 	for _, entry in pairs(soundSnapshots) do
 		pcall(function() entry.sound:setUserVolume(entry.volume) end)
 	end
+	soundSnapshots = {}
 	soundsDucked = false
 end
 
