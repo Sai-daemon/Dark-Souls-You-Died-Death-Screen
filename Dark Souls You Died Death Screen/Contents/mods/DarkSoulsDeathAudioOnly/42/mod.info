@@ -4,4 +4,5 @@ id=DarkSoulsDeathAudioOnly
 description=Audio-only version of Dark Souls You Died death screen
 poster=poster.png
 modversion=1.1.0
+versionMin=42.20
 incompatible=\DarkSoulsYouDied

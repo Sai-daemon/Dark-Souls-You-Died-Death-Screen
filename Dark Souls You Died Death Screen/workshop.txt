@@ -1,6 +1,6 @@
-version=1
+version=1.1.0
 id=3797816171
 title=Dark Souls You Died Death Screen
-description=Replaces the death screen  with a Dark Souls-like death screen.
+description=Replaces the death screen with a Dark Souls-like death screen.
 tags=Build 42;Audio;Interface;Misc;Pop Culture;Silly/Fun;Textures
 visibility=public
