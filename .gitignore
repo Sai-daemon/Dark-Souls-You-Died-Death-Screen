@@ -42,7 +42,9 @@ luac.out
 # Documentation
 *.md
 !README.md
+!API_Documentation.md
 
 # Agent scratch/test files
 TEST_FILES/
 *.sh
+!sync_mod.sh

@@ -3,5 +3,5 @@ author=Riko~Nyaa
 id=DarkSoulsYouDied
 description=Dark Souls "YOU DIED" death screen for Build 42.
 poster=poster.png
-modversion=1.0.0
+modversion=1.1.0
 incompatible=\DarkSoulsDeathAudioOnly

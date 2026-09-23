@@ -13,23 +13,65 @@ DarkSoulsDeathAudioTiming = DarkSoulsDeathAudioTiming or {
 DarkSoulsDeathAudioVolumes = {}
 DarkSoulsDeathAudioPlayerNum = nil
 DarkSoulsDeathAudioClickUntil = 0
+
+-- Seconds after the per-sound duck before ambient streams and rain are stopped.
+DarkSoulsDeathAudioSilence = DarkSoulsDeathAudioSilence or {
+	ambientStreamStopDelay = 0.5,
+}
 local deathTimeMs = nil
 local stingPlayed = false
 
 local function captureBaselines()
 	local okMusic, musicVol = pcall(function() return getSoundManager():getMusicVolume() end)
 	local okSound, soundVol = pcall(function() return getSoundManager():getSoundVolume() end)
-	local okAmbient, ambientVol = pcall(function() return getSoundManager():getAmbientVolume() end)
-	DarkSoulsDeathAudioVolumes.music = okMusic and musicVol or getCore():getOptionMusicVolume()
-	DarkSoulsDeathAudioVolumes.sound = okSound and soundVol or getCore():getOptionSoundVolume()
-	DarkSoulsDeathAudioVolumes.ambient = okAmbient and ambientVol or getCore():getOptionAmbientVolume()
+	local okEngine, engineVol = pcall(function() return getSoundManager():getVehicleEngineVolume() end)
+	DarkSoulsDeathAudioVolumes.music = okMusic and musicVol or getCore():getOptionMusicVolume() / 10.0
+	DarkSoulsDeathAudioVolumes.sound = okSound and soundVol or getCore():getOptionSoundVolume() / 10.0
+	DarkSoulsDeathAudioVolumes.vehicleEngine = okEngine and engineVol or getCore():getOptionVehicleEngineVolume() / 10.0
+	-- SoundManager:getAmbientVolume() is hardcoded to 1.0, so the option is the only real ambient source.
+	DarkSoulsDeathAudioVolumes.ambient = getCore():getOptionAmbientVolume() / 10.0
 end
 
 local soundSnapshots = {}
 local soundsDucked = false
+local duckedAtMs = nil
+local advancedSoundWas = nil
+
+-- GameSound:getUserVolume() returns a hardcoded 1.0 unless the advanced sound options system is on.
+local function enablePerSoundVolume()
+	if advancedSoundWas ~= nil then return end
+	local ok, was = pcall(function() return SystemDisabler.getEnableAdvancedSoundOptions() end)
+	advancedSoundWas = ok and was and true or false
+	pcall(function() SystemDisabler.setEnableAdvancedSoundOptions(true) end)
+end
+
+local function restorePerSoundVolume()
+	if advancedSoundWas == nil then return end
+	local was = advancedSoundWas
+	advancedSoundWas = nil
+	pcall(function() SystemDisabler.setEnableAdvancedSoundOptions(was) end)
+end
+
+-- The player can change the volume options while the death screen is up, so the live options win.
+local function refreshBaselines()
+	local core = getCore()
+	local music = core:getOptionMusicVolume() / 10.0
+	local sound = core:getOptionSoundVolume() / 10.0
+	local ambient = core:getOptionAmbientVolume() / 10.0
+	local engine = core:getOptionVehicleEngineVolume() / 10.0
+	if DarkSoulsDeathAudioVolumes.music == music and DarkSoulsDeathAudioVolumes.sound == sound
+		and DarkSoulsDeathAudioVolumes.ambient == ambient and DarkSoulsDeathAudioVolumes.vehicleEngine == engine then
+		return
+	end
+	DarkSoulsDeathAudioVolumes.music = music
+	DarkSoulsDeathAudioVolumes.sound = sound
+	DarkSoulsDeathAudioVolumes.ambient = ambient
+	DarkSoulsDeathAudioVolumes.vehicleEngine = engine
+end
 
 local function snapshotGameSounds()
 	soundSnapshots = {}
+	enablePerSoundVolume()
 	local ok, cats = pcall(function() return GameSounds.getCategories() end)
 	if not ok or not cats then return end
 	for i = 0, cats:size() - 1 do
@@ -55,8 +97,10 @@ end
 local function duckGameSounds()
 	if soundsDucked then return end
 	soundsDucked = true
+	duckedAtMs = getTimestampMs()
+	-- Not 0: a fresh Alarm has volume 0.0, so its "vol != this.volume" guard would skip SetVolume.
 	for _, entry in pairs(soundSnapshots) do
-		pcall(function() entry.sound:setUserVolume(0.0) end)
+		pcall(function() entry.sound:setUserVolume(0.0001) end)
 	end
 end
 
@@ -77,9 +121,13 @@ local function stopZombieSounds()
 end
 
 local function stopAmbient()
-	local am = getAmbientStreamManager()
-	if am then
-		am:stop()
+	-- am:stop() clears alarmList permanently, so it waits until the duck has reached a sounding alarm.
+	local delay = (DarkSoulsDeathAudioSilence.ambientStreamStopDelay or 0) * 1000
+	if duckedAtMs and getTimestampMs() >= duckedAtMs + delay then
+		local am = getAmbientStreamManager()
+		if am then
+			am:stop()
+		end
 	end
 	local pieces = getSoundManager():getAmbientPieces()
 	if not pieces then return end
@@ -97,6 +145,8 @@ local function restoreGameSounds()
 	end
 	soundSnapshots = {}
 	soundsDucked = false
+	duckedAtMs = nil
+	restorePerSoundVolume()
 end
 
 local function restoreVolumes()
@@ -104,6 +154,9 @@ local function restoreVolumes()
 		pcall(function() getSoundManager():setMusicVolume(DarkSoulsDeathAudioVolumes.music) end)
 		pcall(function() getSoundManager():setSoundVolume(DarkSoulsDeathAudioVolumes.sound) end)
 		pcall(function() getSoundManager():setAmbientVolume(DarkSoulsDeathAudioVolumes.ambient) end)
+		if DarkSoulsDeathAudioVolumes.vehicleEngine ~= nil then
+			pcall(function() getSoundManager():setVehicleEngineVolume(DarkSoulsDeathAudioVolumes.vehicleEngine) end)
+		end
 	end
 	restoreGameSounds()
 end
@@ -141,21 +194,27 @@ end
 local function onTick()
 	if not deathTimeMs then return end
 	if DarkSoulsDeathAudioVolumes.music == nil then return end
+	refreshBaselines()
 	local T = DarkSoulsDeathAudioTiming or { muffleStart = 1, muffleRampDuration = 2, muffleLevel = 0.25, showDelay = 3, blackoutStart = 7, musicRestoreDuration = 2 }
 	local elapsedS = (getTimestampMs() - deathTimeMs) / 1000.0
 	local sm = getSoundManager()
+	local engineVol = DarkSoulsDeathAudioVolumes.vehicleEngine
 	if elapsedS >= T.muffleStart and elapsedS < T.blackoutStart then
 		local muffleProgress = math.min(1.0, (elapsedS - T.muffleStart) / T.muffleRampDuration)
 		local factor = 1.0 - muffleProgress * (1.0 - T.muffleLevel)
 		pcall(function() sm:setMusicVolume(DarkSoulsDeathAudioVolumes.music * factor) end)
 		pcall(function() sm:setSoundVolume(DarkSoulsDeathAudioVolumes.sound * factor) end)
 		pcall(function() sm:setAmbientVolume(DarkSoulsDeathAudioVolumes.ambient * factor) end)
+		if engineVol ~= nil then
+			pcall(function() sm:setVehicleEngineVolume(engineVol * factor) end)
+		end
 	elseif elapsedS >= T.blackoutStart then
 		duckGameSounds()
 		stopZombieSounds()
 		stopAmbient()
 		pcall(function() sm:setSoundVolume(0.0) end)
 		pcall(function() sm:setAmbientVolume(0.0) end)
+		pcall(function() sm:setVehicleEngineVolume(0.0) end)
 		local restoreProgress = math.min(1.0, (elapsedS - T.blackoutStart) / T.musicRestoreDuration)
 		pcall(function() sm:setMusicVolume(DarkSoulsDeathAudioVolumes.music * (T.muffleLevel + (1.0 - T.muffleLevel) * restoreProgress)) end)
 	end

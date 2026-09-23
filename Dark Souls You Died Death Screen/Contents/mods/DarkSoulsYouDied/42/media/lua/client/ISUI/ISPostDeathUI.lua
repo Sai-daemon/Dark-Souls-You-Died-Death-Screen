@@ -6,11 +6,29 @@ local FONT_HGT_LARGE = getTextManager():getFontHeight(UIFont.Large)
 local UI_BORDER_SPACING = 10
 local BUTTON_HGT = FONT_HGT_MEDIUM + 6
 
+local ENGLISH = {
+	UI_DarkSoulsDeath_YouDied = "YOU DIED",
+	UI_DarkSoulsDeath_CharacterStats = "CHARACTER STATS",
+	UI_DarkSoulsDeath_ShowOtherWindows = "SHOW OTHER WINDOWS",
+	UI_DarkSoulsDeath_HideOtherWindows = "HIDE OTHER WINDOWS",
+}
+
+-- Translation keys live in media/lua/shared/Translate/<LANG>/UI.json; add a language by adding that folder.
+local function dsText(key)
+	local text = getText(key)
+	if text == nil or text == key then
+		return ENGLISH[key] or key
+	end
+	return text
+end
+
 function ISPostDeathUI:createChildren()
 	self.respawnLabel = getCore():getGameMode() == "A Really CD DA" and getText("IGUI_PostDeath_Challenge") or getText("IGUI_PostDeath_Respawn")
 	self.exitLabel = getText("IGUI_PostDeath_Exit")
 	self.quitLabel = getText("IGUI_PostDeath_Quit")
-	self.statsLabel = "CHARACTER STATS"
+	self.statsLabel = dsText("UI_DarkSoulsDeath_CharacterStats")
+	self.showWindowsLabel = dsText("UI_DarkSoulsDeath_ShowOtherWindows")
+	self.hideWindowsLabel = dsText("UI_DarkSoulsDeath_HideOtherWindows")
 end
 
 function ISPostDeathUI:prerender()
@@ -48,6 +66,9 @@ function ISPostDeathUI:prerender()
 	if elapsedS > T.blackoutStart then
 		blackoutProgress = math.min(1.0, (elapsedS - T.blackoutStart) / T.blackoutDuration)
 	end
+	if self.revealOtherUI then
+		blackoutProgress = 0.0
+	end
 	self.blackoutProgress = blackoutProgress
 	local overlay = getSearchMode():getSearchModeForPlayer(self.playerIndex)
 	if overlay then
@@ -68,15 +89,20 @@ function ISPostDeathUI:prerender()
 	end
 	if not self.respawning and DarkSoulsDeathVolumes and DarkSoulsDeathVolumes.music ~= nil then
 		local sm = getSoundManager()
+		local engineVol = DarkSoulsDeathVolumes.vehicleEngine
 		if elapsedS >= T.muffleStart and elapsedS < T.blackoutStart then
 			local muffleProgress = math.min(1.0, (elapsedS - T.muffleStart) / T.muffleRampDuration)
 			local factor = 1.0 - muffleProgress * (1.0 - T.muffleLevel)
 			pcall(function() sm:setMusicVolume(DarkSoulsDeathVolumes.music * factor) end)
 			pcall(function() sm:setSoundVolume(DarkSoulsDeathVolumes.sound * factor) end)
 			pcall(function() sm:setAmbientVolume(DarkSoulsDeathVolumes.ambient * factor) end)
+			if engineVol ~= nil then
+				pcall(function() sm:setVehicleEngineVolume(engineVol * factor) end)
+			end
 		elseif elapsedS >= T.blackoutStart then
 			pcall(function() sm:setSoundVolume(0.0) end)
 			pcall(function() sm:setAmbientVolume(0.0) end)
+			pcall(function() sm:setVehicleEngineVolume(0.0) end)
 			local restoreProgress = math.min(1.0, (elapsedS - T.blackoutStart) / T.musicRestoreDuration)
 			pcall(function() sm:setMusicVolume(DarkSoulsDeathVolumes.music * (T.muffleLevel + (1.0 - T.muffleLevel) * restoreProgress)) end)
 		end
@@ -114,7 +140,7 @@ function ISPostDeathUI:render()
 	if not dialogUp then
 		local T = DarkSoulsDeathTiming or { showDelay = 3, barFadeInDuration = 0.4, pngStartScale = 0.9, pngEndScale = 1.05, pngStartAlpha = 0.8, pngEndAlpha = 0.9, pngGrowDuration = 2, pngHoldDuration = 0.3, pngFadeOutDuration = 1 }
 		local elapsedS = (getTimestampMs() - self.timeOfDeathMs) / 1000.0
-		if elapsedS >= T.showDelay then
+		if elapsedS >= T.showDelay and not self.revealOtherUI then
 			if not self.youDiedTexture then
 				self.youDiedTexture = getTexture("media/ui/DarkSoulsDeath/you_died.png")
 				if not self.youDiedTexture then
@@ -220,6 +246,7 @@ function ISPostDeathUI:drawWindow()
 		table.insert(list, { label = self.quitLabel, cb = self.onQuitToDesktop, font = UIFont.Medium, hgt = BUTTON_HGT, fh = FONT_HGT_MEDIUM, joy = joypadActive and Joypad.Texture.BButton or nil })
 	end
 	table.insert(list, { label = self.statsLabel, cb = self.onStats, font = UIFont.Large, hgt = FONT_HGT_LARGE + 6, fh = FONT_HGT_LARGE, joy = joypadActive and Joypad.Texture.YButton or nil })
+	table.insert(list, { label = self.revealOtherUI and self.hideWindowsLabel or self.showWindowsLabel, cb = self.onToggleOtherUI, font = UIFont.Medium, hgt = BUTTON_HGT, fh = FONT_HGT_MEDIUM, joy = joypadActive and Joypad.Texture.LBumper or nil })
 	if #list == 0 then
 		self.buttonRects = {}
 		return
@@ -277,6 +304,10 @@ function ISPostDeathUI:onStats()
 	self.showingStats = true
 end
 
+function ISPostDeathUI:onToggleOtherUI()
+	self.revealOtherUI = not self.revealOtherUI
+end
+
 function ISPostDeathUI:hideStats()
 	self.showingStats = false
 end
@@ -286,6 +317,9 @@ function ISPostDeathUI:restoreVolumes()
 		getSoundManager():setMusicVolume(DarkSoulsDeathVolumes.music)
 		getSoundManager():setSoundVolume(DarkSoulsDeathVolumes.sound)
 		getSoundManager():setAmbientVolume(DarkSoulsDeathVolumes.ambient)
+		if DarkSoulsDeathVolumes.vehicleEngine ~= nil then
+			getSoundManager():setVehicleEngineVolume(DarkSoulsDeathVolumes.vehicleEngine)
+		end
 	end
 	if DarkSoulsDeathRestoreGameSounds then
 		DarkSoulsDeathRestoreGameSounds()
@@ -324,7 +358,7 @@ function ISPostDeathUI:onQuitToDesktop()
 	if self.quitToDesktopDialog then
 		self.quitToDesktopDialog:destroy()
 	end
-	local player = 0
+	local player = self.playerIndex or 0
 	local width = 380;
 	local x = getPlayerScreenLeft(player) + (getPlayerScreenWidth(player) - width) / 2
 	local height = 120;
@@ -427,9 +461,6 @@ function ISPostDeathUI:onMouseWheel(del)
 	return false
 end
 
-function ISPostDeathUI:onGainJoypadFocus(joypadData)
-end
-
 function ISPostDeathUI:onJoypadDown(button, joypadData)
 	if self.showingStats then
 		self:playClick()
@@ -455,14 +486,12 @@ function ISPostDeathUI:onJoypadDown(button, joypadData)
 		self:playClick()
 		self:onStats()
 		return true
+	elseif button == Joypad.LBumper then
+		self:playClick()
+		self:onToggleOtherUI()
+		return true
 	end
 	return false
-end
-
-function ISPostDeathUI:onJoypadBeforeDeactivate(joypadData)
-end
-
-function ISPostDeathUI:onJoypadReactivate(joypadData)
 end
 
 function ISPostDeathUI:new(playerIndex)
@@ -481,6 +510,7 @@ function ISPostDeathUI:new(playerIndex)
 	o.screenWidth = w
 	o.screenHeight = h
 	o.playerIndex = playerIndex
+	o.revealOtherUI = false
 	o:instantiate()
 	o:setAlwaysOnTop(true)
 	o.javaObject:setIgnoreLossControl(true)
@@ -499,7 +529,7 @@ function ISPostDeathUI.OnPlayerDeath(playerObj)
 	panel.timeOfDeath = getTimestamp()
 	panel.timeOfDeathMs = getTimestampMs()
 	panel.lines = {}
-	table.insert(panel.lines, "YOU DIED")
+	table.insert(panel.lines, dsText("UI_DarkSoulsDeath_YouDied"))
 	local s = getGameTime():getDeathString(playerObj)
 	if s then
 		table.insert(panel.lines, s)

@@ -1,7 +1,7 @@
 # Dark Souls You Died Death Screen
 
 
-![Version](https://img.shields.io/badge/Version-1.0-informational.svg)
+![Version](https://img.shields.io/badge/Version-1.1-informational.svg)
 ![License](https://img.shields.io/badge/License-MIT-green)
 ![Game Version](https://img.shields.io/badge/PZ_Game_Version-42.20_Stable-orange) 
 
@@ -15,13 +15,20 @@ Replaces the regular death screen, music, and menu that plays when you die with 
 
 I have included an Audio-only version of the mod which only adds the Dark Souls you died sound effect, with none of the visual/menu changes I made.
 
+***New in Version 1.1:**   
+-Alarms, Car Engines, Generators, Guns, farm animals, and most other other infrequent sound effects have now been blocked out in the death menu  
+-Translation for the menu is now handled by json translation files. So far English is the only one covered  
+-Added support for mods such as better daily reports which pop up a new menu upon death by adding a functionality to toggle the black background off  
+-Reduced the install size by removing redundant files/code  
+-Misc bug fixes*
 
 # Compatibility
 Project Zomboid Version: VERSION   42.20.X STABLE     
 Controller Support: YES   
 Multiplayer Support: UNTESTED   
-Mods (Including UI mods): YES   
-Language Support: ENGLISH
+Mods (Including UI mods): YES     
+Safe to Add/Remove Mid-Game: YES  
+Language Support: ENGLISH. 
 
 # Dependencies and Installation
 
@@ -38,12 +45,8 @@ No Dependencies
 3. Enable in the in-game mod manager
 
 # Known Issues
-- Alarms, Car Engines, Generators, and other infrequent sound effects I was unable to block out the sound during the new character screen that you enter from the death screen. 
->The Audio-only version of this mod does not suffer from this issue.     
-
->I plan on blocking all of the other infrequent sounds out in a future update.
 - Multiplayer and Coop is Untested. 
-- Supports English Only and Text for "You Died" is encoded as a png after being created as a svg. Would require reworking prior to distribution for easier translation to other languages.
+- Supports English Only and Text for "You Died" is encoded as a png after being created as a svg. Would require reworking prior to being able to translate the YOU DIED png into other languages. The menu's have translation support now.
 
 # Font Choice for "YOU DIED"
 
